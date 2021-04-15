@@ -1,8 +1,9 @@
-﻿using MathNet.Numerics.LinearAlgebra;
-using MathNet.Numerics.Optimization;
+﻿using MathNet.Numerics.Interpolation;
+using MathNet.Numerics.LinearAlgebra;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -17,7 +18,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 
-namespace TestFit
+namespace TestInt
 {
     /// <summary>
     /// Interakční logika pro MainWindow.xaml
@@ -29,33 +30,35 @@ namespace TestFit
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
-        Vector<double> sample0, sample1;
-        IUnconstrainedMinimizer BM;
-        public IObjectiveFunction MyFuncE;
-        Vector<double> BaseVal = CreateVector.DenseOfArray(new double[] { 10 , 1 });
-        private int _MaxIter = 100;
+        private double _Wstart = 8000;
 
-        public int MaxIter
+        public double Wstart
         {
-            get { return _MaxIter; }
-            set { _MaxIter = value; OnPropertyChanged("MaxIter"); }
+            get { return _Wstart; }
+            set { _Wstart = value; OnPropertyChanged("Wstart"); }
         }
-        private double _Gradient = 1;
+        private double _Wstop = 12000;
 
-        public double Gradient
+        public double Wstop
         {
-            get { return _Gradient; }
-            set { _Gradient = value; OnPropertyChanged("Gradient"); }
+            get { return _Wstop; }
+            set { _Wstop = value; OnPropertyChanged("Wstop"); }
         }
+        private int _Wnum = 100;
 
-        private string _Path1 = "Test data";
+        public int Wnum
+        {
+            get { return _Wnum; }
+            set { _Wnum = value; OnPropertyChanged("Wnum"); }
+        }
+        private string _Path1 = "D:\\repos\\Pythoviny\\APPLIC\\FIFI\\testW.bin";
 
         public string Path1
         {
             get { return _Path1; }
             set { _Path1 = value; OnPropertyChanged("Path1"); }
         }
-        private string _Path2 = "Test data*2+5";
+        private string _Path2 = "D:\\repos\\Pythoviny\\APPLIC\\FIFI\\testD.bin";
 
         public string Path2
         {
@@ -70,76 +73,51 @@ namespace TestFit
             set { _Results = value; OnPropertyChanged("Results"); }
         }
 
+        double[] sample0, sample1;
         public MainWindow()
         {
             InitializeComponent();
             DataContext = this;
             show.showName = false;
 
-            //BM = new MyConjugateGradientMinimizer(Gradient, MaxIter);
-            BM = new NelderMeadSimplex(Gradient, MaxIter);
-            //MyFuncE = ObjectiveFunction.Gradient(MinimizeE, MinimizeG);
-            MyFuncE = ObjectiveFunction.Value(MinimizeE);
+            sample0 = LoadVector(Path1).ToArray();
+            sample1 = LoadVector(Path2).ToArray();
 
-            Random r = new Random();
-            var N = 100;
-            double A = 5.1, B = 1.8;
-            var s0 = new double[N];
-            var s1 = new double[N];
-            for (int i = 0; i < N; i++)
-            {
-                s0[i] = i + (r.Next(2)-1.0) / 2.0;
-                s1[i] = A + B * i + (r.Next(2) - 1.0) * B / 2.0;
-            }
-            sample0 = CreateVector.DenseOfArray(s1);
-            sample1 = CreateVector.DenseOfArray(s0);
-            StartFit();
+            Button_Click(null, null);
         }
-
-        public void StartFit()
-        {
-            show.addData(sample0.ToArray(), 0);
-            try
-            {
-                var res = BM.FindMinimum(MyFuncE, BaseVal);
-                var x = res.MinimizingPoint;
-                show.addData((x[1]*sample1+x[0]).ToArray(), 1);
-                var sb = new StringBuilder();
-                sb.AppendLine("Iterations " + res.Iterations);
-                sb.AppendLine("Value " + res.FunctionInfoAtMinimum.Value);
-                sb.AppendLine("MinimizingPoint\n" + string.Join("\n", res.MinimizingPoint));
-                sb.AppendLine("\nFunctionInfoAtMinimum\n" + string.Join("\n", res.FunctionInfoAtMinimum.Point));
-
-                Results = sb.ToString();
-            }
-            catch(Exception e)
-            {
-                Console.WriteLine(e.ToString());
-            }
-        }
-
-        public Vector<double> MinimizeG(Vector<double> v)
-        {
-            return v;
-            //return v*0.9;
-            //return CreateVector.DenseOfArray(new double[] { v[0]*v[0] });
-            //return CreateVector.DenseOfArray(new double[] { v[0] });
-            //return CreateVector.DenseOfArray(new double[] { v[0], v[1] });
-        }
-        public double MinimizeE(Vector<double> x)
-        {
-            return (sample0 - sample1 * x[1] - x[0]).PointwisePower(2).Sum();
-        }
-
 
         private void Button_Click(object sender, RoutedEventArgs e)
         {
-            //BM = new ConjugateGradientMinimizer(Gradient, MaxIter);
-            BM = new NelderMeadSimplex(Gradient, MaxIter);
-            show.Clear();
-            StartFit();
-        }
+            show.addData(sample0.ToArray(), sample1.ToArray(), 0);
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+            var x = new double[Wnum];
+            var y = new double[Wnum];
+            IInterpolation spline = null;
+            switch (cbM.SelectedIndex)
+            {
+                case 1:
+                    spline = CubicSpline.InterpolateAkimaSorted(sample0, sample1);
+                    break;
+                default:
+                    spline = LinearSpline.Interpolate(sample0, sample1);
+                    break;
+            }
+            var Wdelta = (Wstop - Wstart) / Wnum;
+            for (int i = 0; i < Wnum; i++)
+            {
+                y[i] = Wstart + i * Wdelta;
+                x[i] = spline.Interpolate(y[i]);
+            }
+            sw.Stop();
+            var tm = sw.ElapsedMilliseconds;
+            show.addData(y, x, 1);
 
+            var sb = new StringBuilder();
+            sb.AppendLine("Time [ms] " + tm);
+
+            Results = sb.ToString();
+        }
         private void Button_Click_1(object sender, RoutedEventArgs e)
         {
             var ofd = new System.Windows.Forms.OpenFileDialog();
@@ -150,14 +128,13 @@ namespace TestFit
             }
             try
             {
-                sample0 = LoadVector(Path1);
+                sample0 = LoadVector(Path1).ToArray();
             }
             catch
             {
 
             }
         }
-
         private void Button_Click_2(object sender, RoutedEventArgs e)
         {
             var ofd = new System.Windows.Forms.OpenFileDialog();
@@ -168,14 +145,13 @@ namespace TestFit
             }
             try
             {
-                sample1 = LoadVector(Path2);
+                sample1 = LoadVector(Path2).ToArray();
             }
             catch
             {
 
             }
         }
-
         public Vector<double> LoadVector(string cesta)
         {
             Vector<double> r = null;
