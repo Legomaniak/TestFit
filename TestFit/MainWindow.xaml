@@ -32,6 +32,12 @@
             </Grid>
             <TextBox Text="{Binding Path2}"/>
             <Separator Height="5" Visibility="Hidden"/>
+            <Label Content="Test"/>
+            <ComboBox x:Name="cbM" SelectedIndex="0">
+                <ComboBoxItem Content="Linear"/>
+                <ComboBoxItem Content="Planc"/>
+            </ComboBox>
+            <Separator Height="5" Visibility="Hidden"/>
             <Label Content="Iterací"/>
             <TextBox Text="{Binding MaxIter}"/>
             <Separator Height="5" Visibility="Hidden"/>
